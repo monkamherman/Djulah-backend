@@ -68,13 +68,3 @@ services:
     # Configuration du domaine
     domains:
       - djulah-backend.onrender.com
-
-# Configuration des bases de données (désactivée - utilisation base externe)
-# databases:
-#   # Base de données MongoDB pour Djulah
-#   - name: djulah-mongodb
-#     databaseName: djulah
-#     user: djulah_user
-#     plan: free
-#     region: oregon
-#     ipAllowList: []  # Restreindre l'accès si nécessaire
