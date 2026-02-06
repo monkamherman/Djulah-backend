@@ -103,15 +103,22 @@ mongoose
 
 // ==================== CLOUDINARY CONNECTION TEST ====================
 // Test de connexion Cloudinary au démarrage
-testCloudinaryConnection().then((result) => {
-  if (result.success) {
-    console.log("🌐 Cloudinary prêt pour les uploads d'images");
-  } else {
-    console.log(
-      "⚠️ Cloudinary non disponible - Les uploads d'images échoueront",
-    );
+const testCloudinary = async () => {
+  try {
+    const result = await testCloudinaryConnection();
+    if (result.success) {
+      console.log("🌐 Cloudinary prêt pour les uploads d'images");
+    } else {
+      console.log(
+        "⚠️ Cloudinary non disponible - Les uploads d'images échoueront",
+      );
+    }
+  } catch (error) {
+    console.log("❌ Erreur test Cloudinary:", error.message);
   }
-});
+};
+
+testCloudinary();
 
 // ==================== API ROUTES ====================
 app.use("/api/auth", authRoutes);
