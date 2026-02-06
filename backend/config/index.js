@@ -13,7 +13,7 @@ const isProd = (process.env.NODE_ENV || "development") === "production";
 const required = (name) => {
   const v = process.env[name];
   if (!v) {
-    if (isProd) {
+    if (isProd && name !== "MONGODB_URI") {
       throw new Error(`Missing required env var: ${name}`);
     }
   }
@@ -54,7 +54,7 @@ const config = {
   publicBaseUrl,
 
   db: {
-    mongoUri: required("MONGODB_URI"),
+    mongoUri: process.env.MONGODB_URI || required("MONGODB_URI"),
   },
 
   jwt: {
