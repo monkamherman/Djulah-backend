@@ -12,10 +12,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Charger les variables d'environnement
-dotenv.config({ path: join(__dirname, "../backend/.env") });
+dotenv.config({ path: join(__dirname, ".env") });
 
-// Imports depuis backend (chemins absolus plus sûrs)
-import authRoutes from "../backend/routes/authRoutes.js";
+// Imports depuis le même dossier backend
+import authRoutes from "../routes/authRoutes.js";
 
 const app = express();
 
@@ -32,7 +32,7 @@ app.use(
 
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "*",
+    origin: "*",
     credentials: true,
   }),
 );
