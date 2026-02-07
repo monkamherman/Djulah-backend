@@ -11,7 +11,7 @@ import config from "./config/index.js";
 import { localeMiddleware } from "./middlewares/localeMiddleware.js";
 
 // Swagger Setup
-import swaggerDocs from "./swagger.js"; // ← This activates /api-docs
+import swaggerDocs from "./swagger.js";
 
 // Routes
 import authRoutes from "./routes/authRoutes.js";
