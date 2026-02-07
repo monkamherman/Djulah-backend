@@ -6,132 +6,119 @@ import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import mongoose from "mongoose";
 
-import { testCloudinaryConnection } from "../backend/config/cloudinaryConfig.js";
 import config from "../backend/config/index.js";
 import { localeMiddleware } from "../backend/middlewares/localeMiddleware.js";
-
-// Swagger Setup
-import swaggerDocs from "../backend/swagger.js";
-
-// Routes
 import authRoutes from "../backend/routes/authRoutes.js";
+import swaggerDocs from "../backend/swagger.js";
 
 const app = express();
 
-// Trust proxy - Required for Vercel
+// Trust proxy
 app.set("trust proxy", 1);
 
-// ==================== MIDDLEWARES ====================
+// Security & Middleware
 app.use(
   helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-        fontSrc: ["'self'", "https://fonts.gstatic.com"],
-        imgSrc: ["'self'", "data:", "https:", "res.cloudinary.com"],
-        scriptSrc: ["'self'"],
-        connectSrc: [
-          "'self'",
-          "https://api.resend.com",
-          "https://api.brevo.com",
-        ],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+        imgSrc: ["'self'", "data:", "https://validator.swagger.io"],
+        connectSrc: ["'self'"],
       },
     },
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
   }),
 );
 
-app.use(
-  cors({
-    origin: "*", // Autorise toutes les origines pour le test
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  }),
-);
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    if (
+      config.cors.allowAllInDev ||
+      config.cors.allowedOrigins.includes(origin)
+    ) {
+      return callback(null, true);
+    }
+    callback(new Error("Not allowed by CORS"));
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-Requested-With",
+    "Accept",
+    "Origin",
+  ],
+};
+
+app.use(cors(corsOptions));
+app.use(localeMiddleware);
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: { success: false, message: "Too many requests" },
+});
+app.use("/api/auth", limiter);
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
-app.use(localeMiddleware);
 
-// ==================== RATE LIMITING ====================
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: {
-    success: false,
-    message: "Too many requests from this IP, please try again later.",
-    data: null,
-  },
-});
-app.use("/api/", limiter);
+// Database (connexion lazy)
+let isConnected = false;
+const connectDB = async () => {
+  if (isConnected) return;
+  await mongoose.connect(config.db.mongoUri);
+  isConnected = true;
+  console.log("MongoDB Connected");
+};
 
-// ==================== API ROUTES ====================
+// Routes
 app.use("/api/auth", authRoutes);
 
-// ==================== HEALTH & WELCOME ====================
-app.get("/health", (req, res) => {
+// Health check
+app.get("/api/health", (req, res) => {
   res.json({
     status: "OK",
     service: "Djulah API",
     timestamp: new Date().toISOString(),
-    version: "1.0.0",
-    environment: config.env,
   });
 });
 
-app.get("/", (req, res) => {
-  res.json({
-    success: true,
-    message: "🎉 Bienvenue sur l'API Djulah Restaurant Management",
-    version: "1.0.0",
-    environment: config.env,
-    documentation: "/api-docs",
-    healthCheck: "/health",
-  });
+// Welcome
+app.get("/api", (req, res) => {
+  res.json({ message: "Welcome to Djulah API", version: "1.0.0" });
 });
 
-// ==================== SWAGGER DOCS ====================
+// Swagger
 swaggerDocs(app);
 
-// ==================== ERROR HANDLING ====================
+// 404
+app.use((req, res) => {
+  res
+    .status(404)
+    .json({
+      success: false,
+      message: "Route not found",
+      path: req.originalUrl,
+    });
+});
+
+// Error handler
 app.use((err, req, res, next) => {
-  console.error("Unhandled Error:", err.stack);
+  console.error("Error:", err.message);
   res.status(err.status || 500).json({
     success: false,
     message: err.message || "Internal Server Error",
-    data: null,
-    ...(config.env === "development" && { stack: err.stack }),
   });
 });
 
-// ==================== DATABASE CONNECTION ====================
-// Connect to MongoDB only if not already connected
-if (mongoose.connection.readyState === 0) {
-  mongoose
-    .connect(config.db.mongoUri)
-    .then(() => console.log("MongoDB Connected"))
-    .catch((err) => {
-      console.error("MongoDB connection error:", err.message);
-    });
+// Export for Vercel (PAS de app.listen!)
+export default async function handler(req, res) {
+  await connectDB();
+  return app(req, res);
 }
-
-// ==================== CLOUDINARY CONNECTION TEST ====================
-const testCloudinary = async () => {
-  try {
-    const result = await testCloudinaryConnection();
-    if (result.success) {
-      console.log("🌐 Cloudinary prêt pour les uploads d'images");
-    } else {
-      console.log(
-        "⚠️ Cloudinary non disponible - Les uploads d'images échoueront",
-      );
-    }
-  } catch (error) {
-    console.log("❌ Erreur test Cloudinary:", error.message);
-  }
-};
-
-testCloudinary();
-
-export default app;
