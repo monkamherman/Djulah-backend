@@ -49,24 +49,17 @@ const limiter = rateLimit({
 app.use("/api/auth", limiter);
 
 // Connexion MongoDB (avec cache pour serverless)
-let cached = global.mongoose;
-if (!cached) {
-  cached = global.mongoose = { conn: null, promise: null };
-}
-
+let isConnected = false;
 async function connectDB() {
-  if (cached.conn) return cached.conn;
-
-  if (!cached.promise) {
-    const opts = {
-      bufferCommands: false,
-      serverSelectionTimeoutMS: 5000,
-    };
-    cached.promise = mongoose.connect(process.env.MONGODB_URI, opts);
+  if (isConnected) return;
+  try {
+    await mongoose.connect(process.env.MONGODB_URI);
+    isConnected = true;
+    console.log("MongoDB Connected");
+  } catch (err) {
+    console.error("MongoDB connection error:", err.message);
+    throw err;
   }
-
-  cached.conn = await cached.promise;
-  return cached.conn;
 }
 
 // Routes
@@ -80,10 +73,18 @@ app.get("/api/health", async (req, res) => {
       status: "OK",
       service: "Djulah API",
       timestamp: new Date().toISOString(),
+      version: "1.0.0",
+      message: "Test avec Express + CORS + MongoDB",
+      features: ["express", "cors", "helmet", "rate-limit", "mongoose"],
       db: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+      method: req.method,
+      url: req.url,
     });
   } catch (err) {
-    res.status(500).json({ status: "ERROR", message: err.message });
+    res.status(500).json({
+      status: "ERROR",
+      message: err.message,
+    });
   }
 });
 
@@ -115,6 +116,12 @@ app.use((err, req, res, next) => {
 });
 
 // Handler Vercel
-export default function handler(req, res) {
-  return app(req, res);
+export default async function handler(req, res) {
+  try {
+    await connectDB();
+    return app(req, res);
+  } catch (err) {
+    console.error("Handler error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
 }
