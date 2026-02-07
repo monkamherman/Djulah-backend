@@ -4,7 +4,7 @@ import express from "express";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import mongoose from "mongoose";
-import { dirname, join } from "path";
+import { dirname } from "path";
 import { fileURLToPath } from "url";
 
 // Résoudre les chemins correctement
@@ -12,11 +12,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Charger les variables d'environnement
-dotenv.config({ path: join(__dirname, ".env") });
+dotenv.config({ path: "./.env" });
 
-// Imports depuis le même dossier backend
+// Import des routes d'authentification
 import authRoutes from "../routes/authRoutes.js";
 
+// Version avec imports progressifs
 const app = express();
 
 // Configuration Express
@@ -32,7 +33,7 @@ app.use(
 
 app.use(
   cors({
-    origin: "*",
+    origin: process.env.CLIENT_URL || "*",
     credentials: true,
   }),
 );
@@ -55,30 +56,57 @@ async function connectDB() {
   try {
     await mongoose.connect(process.env.MONGODB_URI);
     isConnected = true;
-    console.log("MongoDB Connected");
+    console.log("✅ MongoDB Connecté - Production");
   } catch (err) {
-    console.error("MongoDB connection error:", err.message);
+    console.error("❌ Erreur connexion MongoDB:", err.message);
     throw err;
   }
 }
 
-// Routes
+// Test connexion Cloudinary
+function testCloudinary() {
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  const apiKey = process.env.CLOUDINARY_API_KEY;
+
+  if (cloudName && apiKey) {
+    console.log("✅ Cloudinary configuré - Production");
+    console.log(`📸 Cloud: ${cloudName}`);
+    console.log(`🔑 API Key: ${apiKey.substring(0, 8)}...`);
+  } else {
+    console.log("⚠️ Cloudinary non configuré");
+  }
+}
+
+// Routes d'authentification
 app.use("/api/auth", authRoutes);
 
 // Health check
 app.get("/api/health", async (req, res) => {
   try {
     await connectDB();
+    testCloudinary();
+
     res.json({
       status: "OK",
       service: "Djulah API",
       timestamp: new Date().toISOString(),
       version: "1.0.0",
-      message: "Test avec Express + CORS + MongoDB",
-      features: ["express", "cors", "helmet", "rate-limit", "mongoose"],
+      message: "API Production - MongoDB + Cloudinary + Auth",
+      features: [
+        "express",
+        "cors",
+        "helmet",
+        "rate-limit",
+        "mongoose",
+        "cloudinary",
+      ],
       db: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+      cloudinary: process.env.CLOUDINARY_CLOUD_NAME
+        ? "configured"
+        : "not configured",
       method: req.method,
       url: req.url,
+      environment: "production",
     });
   } catch (err) {
     res.status(500).json({
@@ -88,16 +116,17 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
-// Root
+// Root endpoint
 app.get("/api", (req, res) => {
   res.json({
-    message: "Djulah API",
+    message: "Djulah API - Production",
     version: "1.0.0",
     endpoints: ["/api/health", "/api/auth"],
+    status: "operational",
   });
 });
 
-// 404
+// 404 handler
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -108,20 +137,20 @@ app.use((req, res) => {
 
 // Error handler
 app.use((err, req, res, next) => {
-  console.error("Error:", err.message);
+  console.error("💥 Error:", err.message);
   res.status(err.status || 500).json({
     success: false,
     message: err.message || "Internal Server Error",
   });
 });
 
-// Handler Vercel
 export default async function handler(req, res) {
   try {
+    console.log("🚀 Handler appelé:", req.method, req.url);
     await connectDB();
     return app(req, res);
   } catch (err) {
-    console.error("Handler error:", err);
+    console.error("💥 Handler error:", err);
     res.status(500).json({ success: false, message: "Server error" });
   }
 }
