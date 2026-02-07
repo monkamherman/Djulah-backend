@@ -5,7 +5,7 @@ import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import mongoose from "mongoose";
 import { dirname } from "path";
-import fileURLToPath from "url";
+import { fileURLToPath } from "url";
 
 // Résoudre les chemins correctement
 const __filename = fileURLToPath(import.meta.url);
@@ -14,7 +14,7 @@ const __dirname = dirname(__filename);
 // Charger les variables d'environnement
 dotenv.config({ path: "./.env" });
 
-// Import des middlewares et routes
+// Import des routes d'authentification
 import authRoutes from "../routes/authRoutes.js";
 
 // Version avec imports progressifs
@@ -80,6 +80,42 @@ function testCloudinary() {
 // Routes d'authentification
 app.use("/api/auth", authRoutes);
 
+// Détecteur de langue et internationalisation
+const detectLanguage = (acceptLanguage) => {
+  if (!acceptLanguage || typeof acceptLanguage !== "string") return "fr";
+  const lower = acceptLanguage.toLowerCase();
+  if (lower.startsWith("en")) return "en";
+  if (lower.startsWith("fr")) return "fr";
+  return "fr";
+};
+
+const translations = {
+  fr: {
+    "server.error": "Erreur serveur interne",
+    not_found: "Route non trouvée",
+    too_many_requests: "Trop de requêtes. Réessaie plus tard.",
+    "health.status": "OK",
+    "health.service": "Djulah API",
+    "health.message": "API Production - MongoDB + Cloudinary + Auth",
+  },
+  en: {
+    "server.error": "Internal server error",
+    not_found: "Route not found",
+    too_many_requests: "Too many requests. Try again later.",
+    "health.status": "OK",
+    "health.service": "Djulah API",
+    "health.message": "API Production - MongoDB + Cloudinary + Auth",
+  },
+};
+
+// Middleware d'internationalisation
+app.use((req, res, next) => {
+  const locale = detectLanguage(req.headers["accept-language"]);
+  req.locale = locale;
+  req.t = (key) => translations[locale][key] || key;
+  next();
+});
+
 // Health check
 app.get("/api/health", async (req, res) => {
   try {
@@ -87,11 +123,11 @@ app.get("/api/health", async (req, res) => {
     testCloudinary();
 
     res.json({
-      status: "OK",
-      service: "Djulah API",
+      status: req.t("health.status"),
+      service: req.t("health.service"),
       timestamp: new Date().toISOString(),
       version: "1.0.0",
-      message: "API Production - MongoDB + Cloudinary + Auth",
+      message: req.t("health.message"),
       features: [
         "express",
         "cors",
@@ -121,13 +157,10 @@ app.get("/api", (req, res) => {
   res.json({
     message: "Djulah API - Production",
     version: "1.0.0",
-    endpoints: ["/api/health", "/api/auth", "/api-docs"],
+    endpoints: ["/api/health", "/api/auth"],
     status: "operational",
   });
 });
-
-// Swagger Documentation
-swaggerDocs(app);
 
 // 404 handler
 app.use((req, res) => {

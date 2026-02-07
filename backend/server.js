@@ -67,6 +67,36 @@ app.use(cors(corsOptions));
 
 app.use(localeMiddleware);
 
+// Détecteur de langue et internationalisation (pour server.js)
+const detectLanguage = (acceptLanguage) => {
+  if (!acceptLanguage || typeof acceptLanguage !== "string") return "fr";
+  const lower = acceptLanguage.toLowerCase();
+  if (lower.startsWith("en")) return "en";
+  if (lower.startsWith("fr")) return "fr";
+  return "fr";
+};
+
+const translations = {
+  fr: {
+    "server.error": "Erreur serveur interne",
+    not_found: "Route non trouvée",
+    too_many_requests: "Trop de requêtes. Réessaie plus tard.",
+  },
+  en: {
+    "server.error": "Internal server error",
+    not_found: "Route not found",
+    too_many_requests: "Too many requests. Try again later.",
+  },
+};
+
+// Middleware d'internationalisation pour server.js
+app.use((req, res, next) => {
+  const locale = detectLanguage(req.headers["accept-language"]);
+  req.locale = locale;
+  req.t = (key) => translations[locale][key] || key;
+  next();
+});
+
 // Rate limiting (especially for auth) - internationalized
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -149,21 +179,21 @@ swaggerDocs(app); // ← This line gives you /api-docs
 app.use((req, res) => {
   res.status(404).json({
     success: false,
-    message: "Route not found",
-    data: null,
+    message: req.t("not_found"),
     path: req.originalUrl,
     method: req.method,
+    locale: req.locale,
   });
 });
 
 // Global error handler
 app.use((err, req, res, next) => {
-  console.error("Unhandled Error:", err.stack);
+  console.error("❌ Unhandled Error:", err.stack);
   res.status(err.status || 500).json({
     success: false,
-    message: err.message || "Internal Server Error",
-    data: null,
+    message: req.t("server.error"),
     ...(config.env === "development" && { stack: err.stack }),
+    locale: req.locale,
   });
 });
 
